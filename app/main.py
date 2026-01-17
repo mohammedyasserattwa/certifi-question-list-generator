@@ -75,3 +75,5 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         workers=1 if settings.DEBUG else settings.WORKERS
     )
+
+# to run: use `uvicorn main:app --reload`
