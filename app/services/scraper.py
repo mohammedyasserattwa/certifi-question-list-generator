@@ -149,7 +149,7 @@ class QuestionScraper:
         
         # Get answers with images
         answers = []
-        correct_answer = ""
+        correct_answer_letters = []
         choices_container = soup.find("div", class_="question-choices-container")
         
         if choices_container:
@@ -172,14 +172,61 @@ class QuestionScraper:
                         'images': answer_images
                     })
                     
-                    # Check for correct answer
+                    # Check for correct answer - collect ALL correct answers
                     if "correct-hidden" in li.get("class", []):
-                        m = re.match(r"([A-D])\.", answer_text)
+                        m = re.match(r"([A-Za-z])\.", answer_text)
                         if m:
-                            correct_answer = m.group(1)
-                        else:
-                            correct_answer = answer_text[0] if answer_text else ""
+                            correct_answer_letters.append(m.group(1).upper())
+                        elif answer_text:
+                            correct_answer_letters.append(answer_text[0].upper())
+
+        correct_answer = "".join(correct_answer_letters)
         
+        # Check for correct answer images (e.g. for hotspot / drag and drop questions)
+        correct_answer_block = soup.find(class_=re.compile(r"correct-answer"))
+        if correct_answer_block:
+            ca_images = self.image_handler.extract_and_download_images(
+                correct_answer_block,
+                url_question_num,
+                context='correct_answer',
+                download_enabled=download_images
+            )
+            if ca_images:
+                answers.append({
+                    'text': 'See image for correct answer',
+                    'images': ca_images
+                })
+                if not correct_answer:
+                    correct_answer = "Image"
+
+        # Fallback Heuristic: if no answers found, and we have a question image, guess the next URL
+        if not answers and question_images:
+            last_q_img = question_images[-1]['url']
+            guessed_url = self.image_handler.guess_next_image_url(last_q_img)
+            
+            if guessed_url:
+                print(f"  ? Heuristic Guessing Answer Image: {guessed_url}")
+                for i in range(1, 4):  # Check up to +3 just in case
+                    if i > 1:
+                        guessed_url = self.image_handler.guess_next_image_url(guessed_url)
+                        if not guessed_url: break
+                        print(f"  ? Heuristic Guessing Answer Image (+{i}): {guessed_url}")
+                        
+                    guessed_img_data = self.image_handler.check_and_download_guessed_image(
+                        guessed_url,
+                        url_question_num,
+                        download_enabled=download_images
+                    )
+                    
+                    if guessed_img_data:
+                        answers.append({
+                            'text': 'See guessed image for correct answer',
+                            'images': [guessed_img_data]
+                        })
+                        if not correct_answer:
+                            correct_answer = "Image"
+                        break
+
         # Extract category
         category = ""
         cat_el = soup.find("span", class_="category")
@@ -259,7 +306,8 @@ class QuestionScraper:
                 stats['questions_processed'] += 1
                 
                 print(f"✓ Scraped: {data['question'][:80]}...")
-                
+                print(f"  Correct answer(s): {data['correct_answer']}")
+
             except Exception as e:
                 print(f"✗ Failed to scrape {url}: {str(e)}")
                 stats['questions_failed'] += 1

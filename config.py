@@ -3,6 +3,9 @@ Configuration settings for the Certifi Question List Generator API
 """
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Settings:
     """Application settings and configuration"""
@@ -39,6 +42,10 @@ class Settings:
     
     # CORS
     CORS_ORIGINS: list = os.getenv("CORS_ORIGINS", "*").split(",")
+    
+    # Supabase Settings
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

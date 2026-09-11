@@ -5,6 +5,7 @@ import os
 import sys
 import hashlib
 import time
+import re
 from typing import Optional, List, Dict
 from urllib.parse import urlparse, urljoin
 import requests
@@ -155,6 +156,69 @@ class ImageHandler:
             images.append(img_data)
         
         return images
+
+    def guess_next_image_url(self, last_url: str) -> Optional[str]:
+        """
+        Extracts a trailing number from the image filename, increments it, and returns the new URL.
+        Example: 'http://.../image17.png' -> 'http://.../image18.png'
+        """
+        # Match the base url, the number before the extension, and the extension
+        # e.g. group 1: 'http://.../image', group 2: '17', group 3: '.png'
+        match = re.search(r"^(.*?)(\d+)(\.[a-zA-Z0-9]+)$", last_url)
+        if match:
+            base, num_str, ext = match.groups()
+            next_num = int(num_str) + 1
+            # Pad with zeros if original had them
+            next_num_str = str(next_num).zfill(len(num_str))
+            return f"{base}{next_num_str}{ext}"
+        return None
+
+    def check_and_download_guessed_image(
+        self, 
+        guessed_url: str, 
+        question_num: str, 
+        context: str = 'guessed_answer',
+        download_enabled: bool = True
+    ) -> Optional[Dict]:
+        """
+        Check if a guessed URL exists by making a request, and download it if it is an image.
+        """
+        try:
+            # We make a GET request directly since we likely need to download it anyway
+            response = requests.get(
+                guessed_url, 
+                headers=settings.get_request_headers(),
+                timeout=self.timeout,
+                stream=True
+            )
+            
+            if response.status_code == 200 and 'image' in response.headers.get('Content-Type', '').lower():
+                # Generate filename
+                filename, filepath = self.generate_filename(guessed_url, question_num, context, 0)
+                
+                img_data = {
+                    'url': guessed_url,
+                    'local_path': None,
+                    'alt_text': 'Guessed Answer Image',
+                    'title': '',
+                    'position': 0,
+                    'context': context
+                }
+                
+                if download_enabled:
+                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                    with open(filepath, 'wb') as f:
+                        for chunk in response.iter_content(8192):
+                            f.write(chunk)
+                    img_data['local_path'] = filepath
+                    print(f"  ✓ Guessed and Downloaded: {filename}")
+                
+                return img_data
+                
+        except Exception as e:
+            print(f"Failed to check guessed image {guessed_url}: {str(e)}")
+            
+        return None
     
     def cleanup_images(self, question_numbers: List[int]) -> int:
         """

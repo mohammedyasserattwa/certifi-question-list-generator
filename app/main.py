@@ -75,3 +75,7 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         workers=1 if settings.DEBUG else settings.WORKERS
     )
+
+# To run the application:
+# 1. Install dependencies: `pip install -r requirements.txt`
+# 2. Start the server: `python -m app.main`
